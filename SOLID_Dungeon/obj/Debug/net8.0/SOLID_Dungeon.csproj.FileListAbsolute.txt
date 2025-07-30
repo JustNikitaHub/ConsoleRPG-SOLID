@@ -1,0 +1,14 @@
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\bin\Debug\net8.0\SOLID_Dungeon.exe
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\bin\Debug\net8.0\SOLID_Dungeon.deps.json
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\bin\Debug\net8.0\SOLID_Dungeon.runtimeconfig.json
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\bin\Debug\net8.0\SOLID_Dungeon.dll
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\bin\Debug\net8.0\SOLID_Dungeon.pdb
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.GeneratedMSBuildEditorConfig.editorconfig
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.AssemblyInfoInputs.cache
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.AssemblyInfo.cs
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.csproj.CoreCompileInputs.cache
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.dll
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\refint\SOLID_Dungeon.dll
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.pdb
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\SOLID_Dungeon.genruntimeconfig.cache
+F:\Projects\VS\FixedSummer2025\SOLID_Dungeon\obj\Debug\net8.0\ref\SOLID_Dungeon.dll
