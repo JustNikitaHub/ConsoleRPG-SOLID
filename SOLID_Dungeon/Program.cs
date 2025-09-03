@@ -31,10 +31,6 @@
 Сначала исправляем пункты 1-3, затем тестируем (4), потом оптимизируем (5) */
 
 Archer archer = new Archer("Тестовик");
-archer.BuffManager.AddModifier(new StatModifier(StatTypes.Healing, 20));
-GameManager game = new();
-game.Start();
-
 //-----------------------------
 /// <summary>
 /// Интерфейс для всех персонажей, базовые поля и действия
@@ -90,7 +86,7 @@ public interface IPotion : IConsumeble
 }
 
 /// <summary>
-/// База для дальнейших эффектов: одноразовые/продолжительные. Не использовать standalone!
+/// База для дальнейших эффектов: одноразовые/продолжительные.
 /// </summary>
 public interface IEffect
 {
@@ -100,6 +96,135 @@ public interface IEffect
     bool Update(ICharacterModifiable character);
     void Remove(ICharacterModifiable character);
 }
+
+public interface IPerk
+{
+
+    string Name { get; }
+    string Description { get; }
+    bool isActive { get; }
+    void Apply(ICharacterModifiable character);
+    void Remove(ICharacterModifiable character);
+}
+
+/// <summary>
+/// Базовый триггер
+/// </summary>
+public interface ITrigger
+{
+    event Action<ICharacterModifiable, object> OnTrigger;
+    void CheckTrigger(ICharacterModifiable character, object context);
+}
+/// <summary>
+/// Базовое условие
+/// </summary>
+public interface ICondition
+{
+    bool CheckCondition(ICharacterModifiable character, object context);
+}
+
+public class OnAttackTrigger : ITrigger
+{
+    public event Action<ICharacterModifiable, object> OnTrigger;
+    public void CheckTrigger(ICharacterModifiable character, object context)
+    {
+        if (context is ICharacter target) OnTrigger?.Invoke(character, target);
+    }
+}
+public class OnTakeDamageTrigger : ITrigger
+{
+    public event Action<ICharacterModifiable, object> OnTrigger;
+    public void CheckTrigger(ICharacterModifiable character, object context)
+    {
+        if (context is int damage) OnTrigger?.Invoke(character, damage);
+    }
+}
+public class OnHealTrigger : ITrigger
+{
+    public event Action<ICharacterModifiable, object> OnTrigger;
+    public void CheckTrigger(ICharacterModifiable character, object context)
+    {
+        if (context is Action act) OnTrigger?.Invoke(character, act);
+    }
+}
+
+public class HasEffectCondition : ICondition
+{
+    private readonly IEffect _effect = null;
+    public bool CheckCondition(ICharacterModifiable character, object context)
+    {
+        if (context is ICharacterModifiable modifiable) return modifiable.BuffManager.HasEffect(_effect);
+        return false;
+    }
+    public bool CheckCondition(string name, object context)
+    {
+        if (context is ICharacterModifiable modifiable) return modifiable.BuffManager.HasEffect(name);
+        return false;
+    }
+    public HasEffectCondition(IEffect effect)
+    {
+        _effect = effect;
+    }
+}
+
+public abstract class TriggerPerk : IPerk
+{
+    public string Name { get; protected set; } = "Способность: ";
+    public string Description { get; protected set; } = "Действие: ";
+    public bool isActive { get; protected set; } = false;
+    private ITrigger _trigger;
+    private ICondition _condition;
+    private ICharacterModifiable _character;
+
+    /// <summary>
+    /// Создание перка, активация через триггер
+    /// </summary>
+    /// <param name="name">Имя перка</param>
+    /// <param name="description">Описание перка</param>
+    /// <param name="trigger">Метод срабатывания перка</param>
+    /// <param name="condition">Условие срабатывания</param>
+    public TriggerPerk(string name, string description, ITrigger trigger, ICondition condition = null)
+    {
+        Name += name;
+        Description += description;
+        _trigger = trigger;
+        _condition = condition;
+    }
+    public void Apply(ICharacterModifiable character)
+    {
+        _character = character;
+        _trigger.OnTrigger += HandleTrigger;
+        isActive = true;
+    }
+    public void Remove(ICharacterModifiable character)
+    {
+        _trigger.OnTrigger -= HandleTrigger;
+        isActive = false;
+    }
+    protected abstract void HandleTrigger(ICharacterModifiable character, object context);
+    protected virtual bool CheckCondition(object context)
+    {
+        return _condition == null || _condition.CheckCondition(_character,context);
+    }
+}
+
+/// <summary>
+/// Навык Вампирский отсос, активация от атаки, лечение стакается от бафов к лечению
+/// </summary>
+public class VampirePerk : TriggerPerk
+{
+    public VampirePerk() : base("Вампирское лечение", "Дает вам процент лечения от урона по врагу", new OnAttackTrigger()) { }
+    protected override void HandleTrigger(ICharacterModifiable character, object context)
+    {
+        if (context is ICharacter target)
+        {
+            int damageDealt = Math.Max(character.Damage - target.Armor, 0);
+            int healReceave = (int)(damageDealt * 0.05f);
+            character.Heal(healReceave);
+        }
+    }
+}
+
 /// <summary>
 /// Моментальный эффект с дейтвием в один раунд для таких эффектов как зелья
 /// </summary>
@@ -175,6 +300,7 @@ public interface IEquipment                 //любая экипировка и
     void Equip(ICharacter character);       //надеть её и добавить свойства
     void Unequip(ICharacter character);     //снять и убрать свойства
     DamageTypes type { get; }               //тип магический или физический
+    List<IEffect> Effects{ get; }
 
 }
 
@@ -288,6 +414,31 @@ public class BuffManager
             }
         }
     }
+
+    public bool HasEffect(IEffect effect)
+    {
+        return _effects.Contains(effect);
+    }
+    public bool HasEffect(string name)
+    {
+        foreach (var effect in _effects)
+        {
+            if (effect.Name == name) return true;
+        }
+        return false;
+    }
+
+    public void ListEffects()
+    {
+        foreach(StatTypes stat in typeModiferValues.Keys)
+        {
+            Console.WriteLine($"##Модификаторы {stat}:");
+            foreach(StatModifier modifier in typeModiferValues[stat])
+            {
+                Console.WriteLine($"##{modifier}");
+            }
+        }
+    }
     public BuffManager(ICharacterModifiable modifiable)
     {
         _modifiable = modifiable;
@@ -360,12 +511,14 @@ public class StatModifier
     }
 }
 
+
+
 /// <summary>
 /// Общий класс для персонажей, есть инвентарь
 /// </summary>
 public abstract class Character : ICharacter
 {
-    
+
     public string Name { get; protected set; }
     public string Description { get; protected set; }
     public int Health { get; set; } = 100;
@@ -373,7 +526,7 @@ public abstract class Character : ICharacter
     public int Mana { get; set; } = 10;
     public int MaxMana { get; set; } = 10;
     public int Damage { get; set; } = 10;
-    public int Armor {  get; set; } = 10;
+    public int Armor { get; set; } = 10;
     public InventoryManager InventoryManager { get; }
     public virtual void Attack(ICharacter target)
     {
@@ -382,8 +535,8 @@ public abstract class Character : ICharacter
     }
 
     public virtual void TakeDamage(int damage)
-    { 
-        Health -= Math.Max(damage-Armor,1);
+    {
+        Health -= Math.Max(damage - Armor, 1);
         Console.WriteLine($"{Name} получает {damage} урона. Осталось здоровья: {Health}");
     }
 
@@ -401,8 +554,8 @@ public abstract class Character : ICharacter
 
     public virtual void Heal(int heal)
     {
-        
-        Health = Math.Min(MaxHealth, Health+heal);
+
+        Health = Math.Min(MaxHealth, Health + heal);
         Console.WriteLine($"{Name} восстановил {heal} здоровья!");
     }
 
@@ -412,7 +565,7 @@ public abstract class Character : ICharacter
         Console.WriteLine($"{Name} восстановил {healMana} маны!");
     }
 
-    public Character(string name="defname", string description="defdescr", int hp=100, int damage=20)
+    public Character(string name = "defname", string description = "defdescr", int hp = 100, int damage = 20)
     {
         Name = name;
         Description = description;
@@ -443,6 +596,13 @@ public abstract class Player : Character, ICharacterModifiable
         _damage = base.Damage;
         _maxHealth = base.MaxHealth;
         _armor = base.Armor;
+    }
+
+    public override void Heal(int heal)
+    {
+        int overrideHeal = heal;
+        overrideHeal = (int)BuffManager.GetModifiedValue(heal, StatTypes.Healing);
+        base.Heal(overrideHeal);
     }
 
 }
@@ -562,6 +722,7 @@ public class BattleManager //эээ, ****, переделать
     {
         Console.Clear();
         Console.WriteLine($"#Ваше имя: {Player.Name}\n#Урон: {Player.Damage}\n#Броня: {Player.Armor}\n#Здоровье: {Player.Health}\n#Инвентарь: {Player.InventoryManager.CountItems()} из {Player.InventoryManager.Size}");
+        Console.WriteLine($"#Эффекты:");
         PlayerChoice(Player);
     }
 
