@@ -1,36 +1,34 @@
 /* TO-DO LIST для рефакторинга:
+проверить совместимость эффектов и модов
+*/
+var weaknessModifier = new StatModifier(StatTypes.Damage, 0.85f, mult: true);
+//----------!---------------ЭФФЕКТЫ----------------!-------------
+var WeaknessEffect = new TimeEffect(
+    "Слабость",
+    "Уменьшает урон 15% на 5 ходов",
+    5,
+    p => p.BuffManager.AddModifier(weaknessModifier),
+    p => p.BuffManager.RemoveModifier(weaknessModifier)
+);
+var BleedingEffect = new PeriodicEffect(
+    "Кровотечение",
+    "Теряете 5 здоровья 4 хода",
+    4,
+    p => p.TakeDamage(5)
+);
+var RegenerationEffect = new PeriodicEffect(
+    "Регенерация здоровья",
+    "Восстанавливает 10 здоровья 6 ходов",
+    6,
+    p => p.Heal(10)
+);
+//---------!------------------___-------------------------!-------------
 
-1.ИСПРАВИТЬ ИНИЦИАЛИЗАЦИЮ СТАТОВ:
-   -Перенести инициализацию BuffManager в начало конструктора Player
-   - Заменить _damage = Damage на _baseDamage = base.Damage
-   - Для всех базовых статов (_armor, _maxHealth) сделать аналогично
-
-2. ПЕРЕРАБОТАТЬ BattleManager:
-   -Добавить проверку на ICharacterModifiable при выводе статов
-   - Выводить Player.Damage вместо Enemy.Damage в интерфейсе
-   - Убедиться, что BuffManager.UpdateEffects() вызывается корректно
-
-3. ОБНОВИТЬ СИСТЕМУ ЭФФЕКТОВ:
-   -Проверить работу StableEffect с новыми базовыми статами
-   - Убедиться, что модификаторы применяются к _baseDamage, а не к Damage
-
-4. ТЕСТИРОВАНИЕ:
-   -Создать тестового персонажа с известными статами (Damage=10, Armor = 5)
-   - Проверить вывод в BattleManager.ShowPlayer()
-   - Проверить применение баффов/дебаффов
-   - Убедиться, что Archer получает +10 к урону
-
-5. ОПТИМИЗАЦИЯ:
-   -Рассмотреть кэширование модифицированных значений
-   - Добавить dirty-флаги для пересчета только при изменениях
-
-6. ИНТЕРФЕЙСЫ:
-   -Убедиться, что ICharacterModifiable не требует лишних методов
-   - Проверить совместимость со старым кодом
-
-Сначала исправляем пункты 1-3, затем тестируем (4), потом оптимизируем (5) */
 
 Archer archer = new Archer("Тестовик");
+Console.WriteLine(archer.Damage);
+archer.BuffManager.AddEffect(WeaknessEffect);
+Console.WriteLine(archer.Damage);
 //-----------------------------
 /// <summary>
 /// Интерфейс для всех персонажей, базовые поля и действия
@@ -250,10 +248,10 @@ public class StableEffect : IEffect
 {
     private readonly StatModifier _modifier; //бафы с поддержкой процентов(finally!!!)
     public string Name { get; } = "Эффект ";
-    public string Description { get; } = "Длительное действие. ";
+    public string Description { get; } = "Постоянное действие. ";
     public void Apply(ICharacterModifiable character) => character.BuffManager.AddModifier(_modifier);       //добавляется в список модификаторов
     public bool Update(ICharacterModifiable character) => false;                                 //не тухнет сразу
-    public void Remove(ICharacterModifiable character) => character.BuffManager.RemoveModifier(_modifier);  //можно спокойной убирать
+    public void Remove(ICharacterModifiable character) => character.BuffManager.RemoveModifier(_modifier);  //можно спокойно убирать
     /// <summary>
     /// Конструктор для постоянного эффекта
     /// </summary>
@@ -268,23 +266,22 @@ public class StableEffect : IEffect
     }
 }
 /// <summary>
-/// Временный эффект с применением каждый ход для таких эффектов как регенерация или восстановление
+/// Повторяющийся эффект с применением каждый ход для таких эффектов как регенерация или восстановление
 /// </summary>
-public class TimeEffect : IEffect
+public class PeriodicEffect : IEffect
 {
-    private readonly int _duration;
     private int _timeLeft;
     private readonly Action<ICharacterModifiable> _action;
     public string Name { get; } = "Эффект ";
-    public string Description { get; } = "Временное действие. ";
+    public string Description { get; } = "Постепенное действие. ";
     public void Apply(ICharacterModifiable character) => _action(character);
     public bool Update(ICharacterModifiable character)
     {
         _action(character);
-        return --_timeLeft<=0;
+        return --_timeLeft <= 0;
     }
     public void Remove(ICharacterModifiable character) { }
-    public TimeEffect(string name, string descr, int time ,Action<ICharacterModifiable> action)
+    public PeriodicEffect(string name, string descr, int time, Action<ICharacterModifiable> action)
     {
         Name += name;
         Description += descr;
@@ -293,6 +290,33 @@ public class TimeEffect : IEffect
     }
 
 }
+/// <summary>
+/// Временный эффект с отменой под конец действия
+/// </summary>
+public class TimeEffect : IEffect
+{
+    private int _timeLeft;
+    private readonly Action<ICharacterModifiable> _action;
+    private readonly Action<ICharacterModifiable> _reset;
+    public string Name { get; } = "Эффект ";
+    public string Description { get; } = "Временное действие. ";
+    public void Apply(ICharacterModifiable character) => _action(character);
+    public bool Update(ICharacterModifiable character)
+    {
+        return --_timeLeft<=0;
+    }
+    public void Remove(ICharacterModifiable character) => _reset(character);
+    public TimeEffect(string name, string descr, int time ,Action<ICharacterModifiable> action, Action<ICharacterModifiable> reset)
+    {
+        Name += name;
+        Description += descr;
+        _action = action;
+        _reset = reset;
+        _timeLeft = time;
+    }
+
+}
+
 public interface IEquipment                 //любая экипировка имеет
 {
     string Name { get; }                    //имя
@@ -300,7 +324,7 @@ public interface IEquipment                 //любая экипировка и
     void Equip(ICharacter character);       //надеть её и добавить свойства
     void Unequip(ICharacter character);     //снять и убрать свойства
     DamageTypes type { get; }               //тип магический или физический
-    List<IEffect> Effects{ get; }
+    List<IEffect> Effects { get; }
 
 }
 
@@ -316,9 +340,6 @@ public interface IGun : IEquipment          //любое вооружение и
     //TO-DO
 }
 
-//----------!---------------ЭФФЕКТЫ----------------!-------------
-
-//---------!----------------------------------------------!-------------
 
 /// <summary>
 /// Абстракция зелья, как еды
@@ -581,15 +602,15 @@ public abstract class Character : ICharacter
 public abstract class Player : Character, ICharacterModifiable
 {
     public int _damage { get; protected set; }
-    public int _maxHealth {get; protected set; }
-    public int _armor {get; protected set; }
+    public int _maxHealth { get; protected set; }
+    public int _armor { get; protected set; }
     public BuffManager BuffManager { get; }
     public string Nickname { get; protected set; }
     public abstract void SpecialAbility();
     public new int Damage => (int)BuffManager.GetModifiedValue(_damage, StatTypes.Damage);
     public new int Armor => (int)BuffManager.GetModifiedValue(_armor, StatTypes.Armor);
     public new int MaxHealth => (int)BuffManager.GetModifiedValue(_maxHealth, StatTypes.Health);
-    public Player(string nickname="defplr")
+    public Player(string nickname = "defplr")
     {
         BuffManager = new BuffManager(this);
         Nickname = nickname;
@@ -600,9 +621,14 @@ public abstract class Player : Character, ICharacterModifiable
 
     public override void Heal(int heal)
     {
-        int overrideHeal = heal;
-        overrideHeal = (int)BuffManager.GetModifiedValue(heal, StatTypes.Healing);
+        int overrideHeal = (int)BuffManager.GetModifiedValue(heal, StatTypes.Healing);
         base.Heal(overrideHeal);
+    }
+
+    public override void TakeDamage(int damage)
+    {
+        int overrideDamage = (int)BuffManager.GetModifiedValue(damage, StatTypes.Hurt);
+        base.TakeDamage(overrideDamage);
     }
 
 }
@@ -816,4 +842,6 @@ public class GameManager
 
 public enum PotionsTypes { Health, Mana } //сюда добавлять(глобальная штука)
 public enum DamageTypes { Physics, Magic }
-public enum StatTypes { Damage, Health, Healing , Mana, Armor }
+public enum StatTypes { Damage, Health, Healing , Mana, Armor, Hurt }
+
+
